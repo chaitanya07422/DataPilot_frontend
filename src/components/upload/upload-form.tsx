@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { Upload } from "lucide-react";
@@ -34,6 +35,7 @@ export function UploadForm() {
   const [newDatasetName, setNewDatasetName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [lastUploadedFileId, setLastUploadedFileId] = useState<string | null>(null);
 
   const {
     data: datasets,
@@ -95,8 +97,14 @@ export function UploadForm() {
 
       for (const file of Array.from(files)) {
         try {
-          await uploadMutation.mutateAsync({ datasetId, file });
-          setSuccess(`Uploaded ${file.name}. Processing in background…`);
+          const uploaded = await uploadMutation.mutateAsync({ datasetId, file });
+          setLastUploadedFileId(uploaded.id);
+          const isTabular = /\.(csv|xls|xlsx)$/i.test(file.name);
+          setSuccess(
+            isTabular
+              ? `Uploaded ${file.name}. Cleaning and indexing in background…`
+              : `Uploaded ${file.name}. Processing in background…`,
+          );
         } catch (err) {
           let message = "Unknown error";
           if (axios.isAxiosError(err)) {
@@ -247,7 +255,19 @@ export function UploadForm() {
           {uploadMutation.isPending && (
             <p className="text-muted-foreground mt-3 text-sm">Uploading…</p>
           )}
-          {success && <p className="mt-3 text-sm text-green-600">{success}</p>}
+          {success && (
+            <div className="mt-3 space-y-1">
+              <p className="text-sm text-green-600">{success}</p>
+              {lastUploadedFileId && datasetId && (
+                <Link
+                  href={`/datasets/${datasetId}?file=${lastUploadedFileId}`}
+                  className="text-primary text-sm underline"
+                >
+                  View cleaned data →
+                </Link>
+              )}
+            </div>
+          )}
           {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
         </CardContent>
       </Card>
@@ -262,25 +282,41 @@ export function UploadForm() {
               <p className="text-muted-foreground text-sm">No files uploaded yet.</p>
             ) : (
               <ul className="divide-y text-sm">
-                {uploads.map((file) => (
-                  <li key={file.id} className="flex items-center justify-between py-3">
-                    <span className="truncate font-medium">{file.filename}</span>
-                    <span
-                      className={
-                        file.processingStatus === "failed"
-                          ? "text-red-600"
-                          : file.processingStatus === "indexed"
-                            ? "text-green-600"
-                            : "text-muted-foreground"
-                      }
-                    >
-                      {statusLabel(file.processingStatus)}
-                      {file.chunkCount != null && file.processingStatus === "indexed"
-                        ? ` · ${file.chunkCount} chunks`
-                        : ""}
-                    </span>
-                  </li>
-                ))}
+                {uploads.map((file) => {
+                  const isTabular = /\.(csv|xls|xlsx)$/i.test(file.filename);
+                  return (
+                    <li key={file.id} className="flex items-center justify-between gap-3 py-3">
+                      <span className="truncate font-medium">{file.filename}</span>
+                      <div className="flex shrink-0 items-center gap-3">
+                        {isTabular && file.processingStatus === "indexed" && (
+                          <Link
+                            href={`/datasets/${datasetId}?file=${file.id}`}
+                            className="text-primary text-xs underline"
+                          >
+                            Re-clean
+                          </Link>
+                        )}
+                        <span
+                          className={
+                            file.processingStatus === "failed"
+                              ? "text-red-600"
+                              : file.processingStatus === "indexed"
+                                ? "text-green-600"
+                                : "text-muted-foreground"
+                          }
+                        >
+                          {statusLabel(file.processingStatus)}
+                          {file.cleanedRowCount != null && isTabular
+                            ? ` · ${file.cleanedRowCount} rows`
+                            : ""}
+                          {file.chunkCount != null && file.processingStatus === "indexed"
+                            ? ` · ${file.chunkCount} chunks`
+                            : ""}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </CardContent>
