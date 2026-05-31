@@ -1,6 +1,5 @@
-import { PageShell } from "@/components/layout/page-shell";
-import { DatasetGrid } from "@/components/datasets/dataset-grid";
-import { PlaceholderPanel } from "@/components/shared/placeholder-panel";
+import { Suspense } from "react";
+import { DatasetViewer } from "@/components/datasets/dataset-viewer";
 
 type DatasetViewerPageProps = {
   params: Promise<{ id: string }>;
@@ -8,16 +7,9 @@ type DatasetViewerPageProps = {
 
 export default async function DatasetViewerPage({ params }: DatasetViewerPageProps) {
   const { id } = await params;
-
   return (
-    <PageShell title={`Dataset: ${id}`}>
-      <PlaceholderPanel
-        title="Dataset Viewer"
-        description="Explore tabular data with AG Grid. Sample rows shown below."
-      />
-      <div className="mt-6">
-        <DatasetGrid />
-      </div>
-    </PageShell>
+    <Suspense fallback={<p className="p-6 text-sm">Loading dataset…</p>}>
+      <DatasetViewer datasetId={id} />
+    </Suspense>
   );
 }
